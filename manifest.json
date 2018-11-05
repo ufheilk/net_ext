@@ -1,0 +1,16 @@
+{
+    "name": "netflix-changer",
+    "version": "1.0.0",
+    "manifest_version": 2,
+    "description": "changes all netflix headers to oof",
+    "permissions": [
+        "https://*/"
+        ],
+    "content_scripts": [
+    {
+        "matches": ["https://www.netflix.com/*",
+                    "file:///Users/keaton/Documents/Programming/Software_Engineering/final%20project/chrome_extension/practice/netflix-change-all/simple_page.html"],
+        "js": ["contentScript.js"]
+    }
+    ]
+}
