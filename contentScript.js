@@ -1,46 +1,7 @@
 // various constants to be used in looking things up
 const score_class_name = "meter-value superPageFontColor";
-const base_movie_url = "https://www.rottentomatoes.com/m/";
-const base_tv_url = "https://www.rottentomatoes.com/tv/";
-
-// attempts to get a webpage and perform the callback on it. If there is an 
-// error in accessing the first page (e.g. 404), it will attempt the same
-// on the backup url
-function httpGetAsyncWithBackup(main_url, backup_url, callback) {
-    var xmlHttp = new XMLHttpRequest();
-    xmlHttp.onreadystatechange = function() {
-        if (xmlHttp.readyState == 4) {
-            // the request has been completed (possibly unsuccessfully)
-            if (xmlHttp.status == 200) {
-                // everything went according to plan
-                callback(xmlHttp.responseText);
-            } else {
-                // some failure has occurred, go to backup url
-                var xmlHttpBackup = new XMLHttpRequest();
-                xmlHttpBackup.onreadystatechange = function() {
-                    if (xmlHttpBackup.readyState == 4) {
-                        if (xmlHttpBackup.status == 200) {
-                            // backup worked
-                            callback(xmlHttpBackup.responseText);
-                        } else {
-                            // the backup also failed -- all is lost
-                            console.log("Main url and backup url failed");
-                        }
-                    }
-                }
-
-                xmlHttpBackup.open("GET", backup_url, true); // true for async
-                xmlHttpBackup.send(null);
-
-        }
-    }
-    }
-
-    xmlHttp.open("GET", main_url, true); // true for async
-    xmlHttp.send(null);
-}
-
-
+const base_urls = ['https://www.rottentomatoes.com/m/', 
+                   'https://www.rottentomatoes.com/tv/']
 
 // extract score from the RT page by parsing the responseText as a document
 // @param resp: responseText from an XMLHttpRequest
@@ -57,7 +18,7 @@ function parse_score_from_page(resp) {
 function regex_score_from_page(resp) {
     var reg = /<span class="meter-value superPageFontColor"><span>([0-9]+)<\/span>%<\/span>/;
     matches = resp.match(reg);
-    if (matches.length > 0) {
+    if (matches) {
         // something was read
         return matches[1];
     } else {
@@ -99,8 +60,6 @@ function get_media_score(title) {
 
 function observation_callback(mutationList, observer) {
     for (var mutation of mutationList) {
-        console.log("mutation occurred!");
-        // mutation.getElementsByClassName("prostagma?");
         for (var node of mutation.addedNodes) {
             paragraphs = node.getElementsByClassName("prostagma?");
             if (paragraphs) {
@@ -119,15 +78,32 @@ function change_scores(mutationList, observer) {
 
                 var title = transform_title(get_title(overlay));
 
-                httpGetAsyncWithBackup(base_movie_url + title, base_tv_url + title, function(resp) {
-                    new_score = regex_score_from_page(resp); // score from rotten tomatoes
-
-                    score = get_score_elem(overlay); // actual score element on netflix page
-                    if (score) {
-                        score.innerText = new_score;
-                    }
-                    console.log(new_score);
-                });
+                // attempt to find the media title both as a movie and tv show
+                Promise.all(base_urls.map(url => fetch(url + title)))
+                    .then(responses => {
+                        for (var response of responses) {
+                            if (response.status === 200) {
+                                // valid response found
+                                return response.text();
+                            }
+                        }
+                        // neither url returned anything -> report failure
+                        return null;
+                    })
+                    .then(text => {
+                        score = get_score_elem(overlay);
+                        if (text) {
+                            newScore = regex_score_from_page(text);
+                            score = get_score_elem(overlay);
+                            if (score) {
+                                score.innerText = newScore;
+                            }
+                        } else {
+                            if (score) {
+                                score.innerText = 'NA';
+                            }
+                        }
+                    });
             }
         }
     }
